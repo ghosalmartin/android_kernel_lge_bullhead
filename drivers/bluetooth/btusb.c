@@ -268,6 +268,11 @@ struct btusb_data {
 	unsigned int sco_num;
 	int isoc_altsetting;
 	int suspend_count;
+
+	int (*recv_event)(struct hci_dev *hdev, struct sk_buff *skb);
+	int (*recv_bulk)(struct btusb_data *data, void *buffer, int count);
+
+	int (*setup_on_usb)(struct hci_dev *hdev);
 };
 
 static int inc_tx(struct btusb_data *data)
@@ -641,6 +646,15 @@ static int btusb_open(struct hci_dev *hdev)
 	int err;
 
 	BT_DBG("%s", hdev->name);
+
+	/* Patching USB firmware files prior to starting any URBs of HCI path
+	 * It is more safe to use USB bulk channel for downloading USB patch
+	 */
+	if (data->setup_on_usb) {
+		err = data->setup_on_usb(hdev);
+		if (err <0)
+			return err;
+	}
 
 	err = usb_autopm_get_interface(data->intf);
 	if (err < 0)
